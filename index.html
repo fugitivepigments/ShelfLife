@@ -173,6 +173,7 @@
       flex-wrap: wrap;
       gap: 10px;
       margin-top: 12px;
+      align-items: center;
     }
     button {
       border: none;
@@ -189,6 +190,24 @@
     .secondary { background: var(--accent-2); color: white; }
     .ghost { background: #eef2ff; color: var(--accent); }
     .warn { background: #fef2f2; color: var(--danger); }
+    .toggle-group {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: white;
+    }
+    .toggle-btn {
+      border-radius: 0;
+      background: white;
+      color: var(--text);
+      border-right: 1px solid var(--border);
+    }
+    .toggle-btn:last-child { border-right: none; }
+    .toggle-btn.active {
+      background: var(--accent);
+      color: white;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -205,6 +224,12 @@
       background: #fafafa;
       z-index: 1;
     }
+    .field-log-table td { vertical-align: top; }
+    .status-select, .notes-input {
+      font-size: 0.84rem;
+      padding: 8px 10px;
+    }
+    .notes-input { min-width: 180px; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     .results-grid {
       display: grid;
@@ -221,12 +246,53 @@
       font-size: 1.25rem;
       font-weight: 800;
     }
+    .progress-wrap {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .progress-block {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px;
+      background: #fafafa;
+    }
+    .progress-label {
+      font-size: 0.84rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .progress-track {
+      width: 100%;
+      height: 10px;
+      background: #e5e7eb;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), #60a5fa);
+      border-radius: 999px;
+      transition: width 0.18s ease;
+    }
+    .progress-meta {
+      margin-top: 6px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
     .small {
       color: var(--muted);
       font-size: 0.82rem;
     }
     .footer-note {
       margin-top: 16px;
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+    .status-note {
+      margin-top: 10px;
       font-size: 0.84rem;
       color: var(--muted);
     }
@@ -413,9 +479,74 @@
       </div>
     </div>
 
+    <div class="card" style="margin-top:16px;">
+      <h2>6. Field Progress Dashboard</h2>
+      <div class="sub" style="margin:0 0 12px; font-size:0.92rem; max-width:none;">Track survey execution in real time, monitor hit and miss rates, and export an annotated field log. The dashboard defaults to walking order for staff efficiency, with an option to switch to the original random-order batch.</div>
+
+      <div class="results-grid" id="fieldStats">
+        <div class="stat"><div class="small">Target usable sample</div><div class="value">—</div></div>
+        <div class="stat"><div class="small">Rows attempted</div><div class="value">—</div></div>
+        <div class="stat"><div class="small">Usable hits</div><div class="value">—</div></div>
+        <div class="stat"><div class="small">Misses</div><div class="value">—</div></div>
+        <div class="stat"><div class="small">Other unusable</div><div class="value">—</div></div>
+        <div class="stat"><div class="small">Remaining needed</div><div class="value">—</div></div>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-block">
+          <div class="progress-label">Attempted vs Planned Draws</div>
+          <div class="progress-track"><div class="progress-fill" id="attemptedProgress"></div></div>
+          <div class="progress-meta" id="attemptedMeta">No active batch</div>
+        </div>
+        <div class="progress-block">
+          <div class="progress-label">Usable Hits vs Target Sample</div>
+          <div class="progress-track"><div class="progress-fill" id="usableProgress"></div></div>
+          <div class="progress-meta" id="usableMeta">No active batch</div>
+        </div>
+        <div class="progress-block">
+          <div class="progress-label">Observed Hit Rate</div>
+          <div class="progress-track"><div class="progress-fill" id="hitRateProgress"></div></div>
+          <div class="progress-meta" id="hitRateMeta">No active batch</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="initDashboardBtn" disabled>Initialize dashboard from current sample</button>
+        <div class="toggle-group" role="group" aria-label="Field log order">
+          <button class="toggle-btn active" id="walkingViewBtn" type="button">Walking order</button>
+          <button class="toggle-btn" id="randomViewBtn" type="button">Random order</button>
+        </div>
+        <button class="ghost" id="saveFieldBtn" disabled>Save progress in browser</button>
+        <button class="ghost" id="resetFieldBtn" disabled>Reset field statuses</button>
+        <button class="warn" id="clearSavedFieldBtn">Clear saved progress</button>
+        <button class="secondary" id="exportFieldBtn" disabled>Export annotated CSV</button>
+      </div>
+      <div class="status-note" id="fieldStatusNote">Generate a sample first, then initialize the field dashboard.</div>
+
+      <div style="overflow:auto; max-height:420px; margin-top:12px;">
+        <table class="field-log-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Range</th>
+              <th>Side</th>
+              <th>Bay</th>
+              <th>Shelf</th>
+              <th>Item</th>
+              <th>Status</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="fieldLogBody">
+            <tr><td colspan="8" class="small">No active field log yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="info-grid">
       <div class="card">
-        <h2>6. About This Tool</h2>
+        <h2>7. About This Tool</h2>
         <p class="small">This project recreates a core planning function of the historic CALIPR preservation survey workflow: estimating a statistically valid sample and converting that sample into randomized physical stack locations.</p>
         <ul>
           <li>Useful for large-scale condition assessment when item-by-item review is impractical.</li>
@@ -429,7 +560,7 @@
       </div>
 
       <div class="card">
-        <h2>7. Methods &amp; Notes</h2>
+        <h2>8. Methods &amp; Notes</h2>
         <p class="small">The sample size estimate uses a conservative proportion (<code>p = 0.5</code>) with finite population correction. Planned draws are then inflated based on occupancy to account for likely misses in physical stack sampling.</p>
         <ul>
           <li><strong>Target sample (n):</strong> statistically adjusted survey size.</li>
@@ -466,51 +597,91 @@
     let randomRows = [];
     let walkingRows = [];
     let topUpRows = [];
+    let fieldLogRows = [];
+    let fieldViewMode = 'walking';
     let methodSummary = '';
     let lastInput = null;
     let lastMap = null;
+    let targetSampleSize = 0;
+    let plannedDrawCount = 0;
+    const FIELD_STORAGE_KEY = 'caliprFieldDashboardState';
 
-    function byId(id) { return document.getElementById(id); }
+    function byId(id) {
+      return document.getElementById(id);
+    }
+
     function resetDefaults() {
-      Object.entries(defaults).forEach(([key, value]) => { byId(key).value = value; });
+      Object.entries(defaults).forEach(([key, value]) => {
+        byId(key).value = value;
+      });
       randomRows = [];
       walkingRows = [];
       topUpRows = [];
+      fieldLogRows = [];
+      fieldViewMode = 'walking';
       methodSummary = '';
       lastInput = null;
       lastMap = null;
+      targetSampleSize = 0;
+      plannedDrawCount = 0;
       renderResults(null);
       renderPreview([]);
+      renderFieldDashboard();
       byId('topUpNote').textContent = '';
+      byId('fieldStatusNote').textContent = 'Generate a sample first, then initialize the field dashboard.';
       setDownloads(false);
+      updateFieldButtons();
+      setFieldViewMode('walking');
     }
+
     function setDownloads(enabled) {
       byId('downloadRandomBtn').disabled = !enabled;
       byId('downloadWalkingBtn').disabled = !enabled;
       byId('downloadMethodBtn').disabled = !enabled;
       byId('topUpBtn').disabled = !enabled;
       byId('downloadTopUpBtn').disabled = topUpRows.length === 0;
+      byId('initDashboardBtn').disabled = !enabled;
     }
+
+    function updateFieldButtons() {
+      const hasFieldLog = fieldLogRows.length > 0;
+      byId('saveFieldBtn').disabled = !hasFieldLog;
+      byId('resetFieldBtn').disabled = !hasFieldLog;
+      byId('exportFieldBtn').disabled = !hasFieldLog;
+    }
+
     function parsePattern(str, fallback = [1]) {
-      const values = String(str).split(',').map(v => parseInt(v.trim(), 10)).filter(v => Number.isFinite(v) && v > 0);
+      const values = String(str)
+        .split(',')
+        .map(v => parseInt(v.trim(), 10))
+        .filter(v => Number.isFinite(v) && v > 0);
       return values.length ? values : fallback;
     }
+
     function parseRangeBayMap(str, sidesPerRange) {
       const map = new Map();
-      const lines = String(str || '').split(/?
-/).map(line => line.trim()).filter(Boolean);
+      const lines = String(str || '')
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean);
+
       for (const line of lines) {
         const [rangePart, baysPart] = line.split(':');
         const rangeNum = parseInt((rangePart || '').trim(), 10);
         const bayValues = parsePattern(baysPart || '', []);
+
         if (Number.isFinite(rangeNum) && rangeNum > 0 && bayValues.length) {
           const normalized = bayValues.slice(0, sidesPerRange);
-          while (normalized.length < sidesPerRange) normalized.push(normalized[normalized.length - 1]);
+          while (normalized.length < sidesPerRange) {
+            normalized.push(normalized[normalized.length - 1]);
+          }
           map.set(rangeNum, normalized);
         }
       }
+
       return map;
     }
+
     function mulberry32(seed) {
       let t = seed >>> 0;
       return function() {
@@ -520,6 +691,7 @@
         return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
       };
     }
+
     function fisherYatesSample(n, k, rng) {
       const arr = Array.from({ length: n }, (_, i) => i);
       for (let i = 0; i < k; i++) {
@@ -528,6 +700,7 @@
       }
       return arr.slice(0, k);
     }
+
     function computeSampleSize(N, z, moePct) {
       const p = 0.5;
       const e = moePct / 100;
@@ -535,10 +708,12 @@
       const n = n0 / (1 + ((n0 - 1) / N));
       return { n0, n: Math.ceil(n) };
     }
+
     function buildUniverseMap({ ranges, sidesPerRange, shelvesPerBay, itemsPerShelf, bayPattern, sideLabels, rangeBayOverrides }) {
       const sides = ranges * sidesPerRange;
       const cumulative = [];
       let running = 0;
+
       for (let sideIndex = 0; sideIndex < sides; sideIndex++) {
         const range = Math.floor(sideIndex / sidesPerRange) + 1;
         const sidePos = sideIndex % sidesPerRange;
@@ -546,15 +721,20 @@
         const bays = override ? override[sidePos] : bayPattern[sideIndex % bayPattern.length];
         const slots = bays * shelvesPerBay * itemsPerShelf;
         const sideLabel = sideLabels[sidePos % sideLabels.length] || `S${sidePos + 1}`;
+
         running += slots;
         cumulative.push({ upper: running, bays, slots, range, sideLabel });
       }
+
       return { cumulative, totalSlots: running };
     }
+
     function locateIndex(globalIndex, map, shelvesPerBay, itemsPerShelf) {
       const oneBased = globalIndex + 1;
       const side = map.cumulative.find(entry => oneBased <= entry.upper);
-      if (!side) throw new Error('Could not map sampled index to a stack location.');
+      if (!side) {
+        throw new Error('Could not map sampled index to a stack location.');
+      }
       const sideIndex = map.cumulative.indexOf(side);
       const prevUpper = map.cumulative[sideIndex - 1]?.upper || 0;
       const local = oneBased - prevUpper - 1;
@@ -563,8 +743,16 @@
       const withinBay = local % perBay;
       const shelf = Math.floor(withinBay / itemsPerShelf) + 1;
       const item = (withinBay % itemsPerShelf) + 1;
-      return { Range: side.range, Side: side.sideLabel, Bay: bay, Shelf: shelf, Item: item };
+
+      return {
+        Range: side.range,
+        Side: side.sideLabel,
+        Bay: bay,
+        Shelf: shelf,
+        Item: item,
+      };
     }
+
     function getInput() {
       const input = {
         collectionName: byId('collectionName').value.trim() || 'Preservation Survey Sample',
@@ -581,25 +769,54 @@
         rangeBayOverrides: parseRangeBayMap(byId('rangeBayMap').value, parseInt(byId('sidesPerRange').value, 10) || 2),
         sideLabels: String(byId('sideLabels').value || 'A,B').split(',').map(s => s.trim()).filter(Boolean),
       };
-      if (!Number.isFinite(input.totalItems) || input.totalItems < 1) throw new Error('Please enter a valid total item count.');
-      if (!Number.isFinite(input.moe) || input.moe <= 0) throw new Error('Please enter a valid margin of error.');
-      if (!Number.isFinite(input.occupancy) || input.occupancy <= 0 || input.occupancy > 100) throw new Error('Occupancy must be between 1 and 100.');
+
+      if (!Number.isFinite(input.totalItems) || input.totalItems < 1) {
+        throw new Error('Please enter a valid total item count.');
+      }
+      if (!Number.isFinite(input.moe) || input.moe <= 0) {
+        throw new Error('Please enter a valid margin of error.');
+      }
+      if (!Number.isFinite(input.occupancy) || input.occupancy <= 0 || input.occupancy > 100) {
+        throw new Error('Occupancy must be between 1 and 100.');
+      }
       return input;
     }
+
     function generate() {
       try {
         const input = getInput();
         const { n0, n } = computeSampleSize(input.totalItems, input.confidence, input.moe);
         const draws = Math.ceil(n / (input.occupancy / 100));
         const map = buildUniverseMap(input);
-        if (draws > map.totalSlots) throw new Error('Planned draws exceed available stack slots. Reduce sample size or increase stack map capacity.');
+
+        if (draws > map.totalSlots) {
+          throw new Error('Planned draws exceed available stack slots. Reduce sample size or increase stack map capacity.');
+        }
+
         const rng = mulberry32(input.seed || 1);
         const sampledIndices = fisherYatesSample(map.totalSlots, draws, rng);
-        randomRows = sampledIndices.map((idx, i) => ({ RandomOrderIndex: i + 1, ...locateIndex(idx, map, input.shelvesPerBay, input.itemsPerShelf) }));
-        walkingRows = [...randomRows].sort((a, b) => a.Range - b.Range || String(a.Side).localeCompare(String(b.Side)) || a.Bay - b.Bay || a.Shelf - b.Shelf || a.Item - b.Item);
+
+        randomRows = sampledIndices.map((idx, i) => ({
+          RandomOrderIndex: i + 1,
+          ...locateIndex(idx, map, input.shelvesPerBay, input.itemsPerShelf),
+        }));
+
+        walkingRows = [...randomRows].sort((a, b) =>
+          a.Range - b.Range ||
+          String(a.Side).localeCompare(String(b.Side)) ||
+          a.Bay - b.Bay ||
+          a.Shelf - b.Shelf ||
+          a.Item - b.Item
+        );
+
         topUpRows = [];
+        fieldLogRows = [];
+        fieldViewMode = 'walking';
         lastInput = input;
         lastMap = map;
+        targetSampleSize = n;
+        plannedDrawCount = draws;
+
         methodSummary = [
           `Collection: ${input.collectionName}`,
           `N=${input.totalItems}`,
@@ -615,30 +832,61 @@
           `Universe slots=${map.totalSlots}`,
           `Seed=${input.seed}`,
           'Method note: attempt every row in the list to avoid bias; if misses are higher than expected, generate a new top-up batch with a fresh seed.'
-        ].join('
-');
-        renderResults({ n, draws, totalSlots: map.totalSlots, fpc: `${Math.ceil(n0)} → ${n}`, moe: input.moe, occupancy: input.occupancy, seed: input.seed });
-        renderPreview(randomRows.slice(0, 15));
+        ].join('\n');
+
+        renderResults({
+          n,
+          draws,
+          totalSlots: map.totalSlots,
+          fpc: `${Math.ceil(n0)} → ${n}`,
+          moe: input.moe,
+          occupancy: input.occupancy,
+          seed: input.seed,
+        });
+
+        renderPreview(walkingRows.slice(0, 15));
+        setFieldViewMode('walking');
+        renderFieldDashboard();
         byId('topUpNote').textContent = '';
+        byId('fieldStatusNote').textContent = 'Sample generated. Initialize the dashboard to start field tracking in walking order.';
         setDownloads(true);
-      } catch (err) { alert(err.message); }
+        updateFieldButtons();
+      } catch (err) {
+        alert(err.message);
+      }
     }
+
     function generateTopUp() {
       if (!lastInput || !lastMap) return;
+
       const topUpCount = parseInt(byId('topUpCount').value, 10);
       const topUpSeed = parseInt(byId('topUpSeed').value, 10);
-      if (!Number.isFinite(topUpCount) || topUpCount < 1) return alert('Please enter a valid top-up count.');
-      if (!Number.isFinite(topUpSeed) || topUpSeed < 1) return alert('Please enter a valid top-up seed.');
-      if (topUpCount > lastMap.totalSlots) return alert('Top-up count exceeds available stack slots.');
+
+      if (!Number.isFinite(topUpCount) || topUpCount < 1) {
+        return alert('Please enter a valid top-up count.');
+      }
+      if (!Number.isFinite(topUpSeed) || topUpSeed < 1) {
+        return alert('Please enter a valid top-up seed.');
+      }
+      if (topUpCount > lastMap.totalSlots) {
+        return alert('Top-up count exceeds available stack slots.');
+      }
+
       const rng = mulberry32(topUpSeed);
       const sampledIndices = fisherYatesSample(lastMap.totalSlots, topUpCount, rng);
-      topUpRows = sampledIndices.map((idx, i) => ({ TopUpIndex: i + 1, ...locateIndex(idx, lastMap, lastInput.shelvesPerBay, lastInput.itemsPerShelf) }));
+      topUpRows = sampledIndices.map((idx, i) => ({
+        TopUpIndex: i + 1,
+        ...locateIndex(idx, lastMap, lastInput.shelvesPerBay, lastInput.itemsPerShelf),
+      }));
+
       byId('topUpNote').textContent = `Top-up batch ready: ${topUpRows.length} additional randomized rows generated with seed ${topUpSeed}. Download the CSV to use it as a separate follow-on batch.`;
       byId('downloadTopUpBtn').disabled = false;
     }
+
     function renderResults(data) {
       const container = byId('results');
       const pills = byId('methodPills');
+
       if (!data) {
         container.innerHTML = [
           '<div class="stat"><div class="small">Target sample (n)</div><div class="value">—</div></div>',
@@ -649,12 +897,14 @@
         pills.innerHTML = '';
         return;
       }
+
       container.innerHTML = [
         `<div class="stat"><div class="small">Target sample (n)</div><div class="value">${data.n.toLocaleString()}</div></div>`,
         `<div class="stat"><div class="small">Planned draws</div><div class="value">${data.draws.toLocaleString()}</div></div>`,
         `<div class="stat"><div class="small">Universe slots</div><div class="value">${data.totalSlots.toLocaleString()}</div></div>`,
         `<div class="stat"><div class="small">Finite-pop. adjusted</div><div class="value">${data.fpc}</div></div>`
       ].join('');
+
       pills.innerHTML = [
         `<span class="pill">MOE ${data.moe}%</span>`,
         `<span class="pill">Occupancy ${data.occupancy}%</span>`,
@@ -662,9 +912,14 @@
         '<span class="pill">Top-up enabled</span>'
       ].join('');
     }
+
     function renderPreview(rows) {
-      const tbody = byId('previewBody');
-      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="small">Generate a sample to preview rows.</td></tr>'; return; }
+      const tbody = document.getElementById('previewBody');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="small">Generate a sample to preview rows.</td></tr>';
+        return;
+      }
+
       tbody.innerHTML = rows.map(r => `
         <tr>
           <td>${r.RandomOrderIndex}</td>
@@ -676,19 +931,216 @@
         </tr>
       `).join('');
     }
+
+    function setFieldViewMode(mode) {
+      fieldViewMode = mode === 'random' ? 'random' : 'walking';
+      byId('walkingViewBtn').classList.toggle('active', fieldViewMode === 'walking');
+      byId('randomViewBtn').classList.toggle('active', fieldViewMode === 'random');
+      renderFieldTable();
+    }
+
+    function createFieldLogRows() {
+      const sourceRows = fieldViewMode === 'walking' ? walkingRows : randomRows;
+      fieldLogRows = sourceRows.map((row, index) => ({
+        DisplayIndex: index + 1,
+        RandomOrderIndex: row.RandomOrderIndex,
+        Range: row.Range,
+        Side: row.Side,
+        Bay: row.Bay,
+        Shelf: row.Shelf,
+        Item: row.Item,
+        Status: 'Pending',
+        Notes: '',
+      }));
+      renderFieldDashboard();
+      updateFieldButtons();
+    }
+
+    function getFieldMetrics() {
+      const attempted = fieldLogRows.filter(r => r.Status !== 'Pending').length;
+      const hits = fieldLogRows.filter(r => r.Status === 'Surveyed').length;
+      const misses = fieldLogRows.filter(r => r.Status === 'Empty / not found').length;
+      const other = fieldLogRows.filter(r => r.Status === 'Inaccessible' || r.Status === 'Duplicate / unusable').length;
+      const remaining = Math.max(0, targetSampleSize - hits);
+      const hitRate = attempted > 0 ? (hits / attempted) : 0;
+      return { attempted, hits, misses, other, remaining, hitRate };
+    }
+
+    function renderFieldDashboard() {
+      const stats = byId('fieldStats');
+      const metrics = getFieldMetrics();
+
+      if (!fieldLogRows.length) {
+        stats.innerHTML = [
+          '<div class="stat"><div class="small">Target usable sample</div><div class="value">—</div></div>',
+          '<div class="stat"><div class="small">Rows attempted</div><div class="value">—</div></div>',
+          '<div class="stat"><div class="small">Usable hits</div><div class="value">—</div></div>',
+          '<div class="stat"><div class="small">Misses</div><div class="value">—</div></div>',
+          '<div class="stat"><div class="small">Other unusable</div><div class="value">—</div></div>',
+          '<div class="stat"><div class="small">Remaining needed</div><div class="value">—</div></div>'
+        ].join('');
+        byId('attemptedProgress').style.width = '0%';
+        byId('usableProgress').style.width = '0%';
+        byId('hitRateProgress').style.width = '0%';
+        byId('attemptedMeta').textContent = 'No active batch';
+        byId('usableMeta').textContent = 'No active batch';
+        byId('hitRateMeta').textContent = 'No active batch';
+        renderFieldTable();
+        return;
+      }
+
+      stats.innerHTML = [
+        `<div class="stat"><div class="small">Target usable sample</div><div class="value">${targetSampleSize.toLocaleString()}</div></div>`,
+        `<div class="stat"><div class="small">Rows attempted</div><div class="value">${metrics.attempted.toLocaleString()}</div></div>`,
+        `<div class="stat"><div class="small">Usable hits</div><div class="value">${metrics.hits.toLocaleString()}</div></div>`,
+        `<div class="stat"><div class="small">Misses</div><div class="value">${metrics.misses.toLocaleString()}</div></div>`,
+        `<div class="stat"><div class="small">Other unusable</div><div class="value">${metrics.other.toLocaleString()}</div></div>`,
+        `<div class="stat"><div class="small">Remaining needed</div><div class="value">${metrics.remaining.toLocaleString()}</div></div>`
+      ].join('');
+
+      const attemptedPct = plannedDrawCount ? Math.min(100, (metrics.attempted / plannedDrawCount) * 100) : 0;
+      const usablePct = targetSampleSize ? Math.min(100, (metrics.hits / targetSampleSize) * 100) : 0;
+      const hitRatePct = metrics.hitRate * 100;
+      byId('attemptedProgress').style.width = `${attemptedPct}%`;
+      byId('usableProgress').style.width = `${usablePct}%`;
+      byId('hitRateProgress').style.width = `${hitRatePct}%`;
+      byId('attemptedMeta').textContent = `${metrics.attempted} of ${plannedDrawCount} rows attempted`;
+      byId('usableMeta').textContent = `${metrics.hits} usable hits toward ${targetSampleSize}`;
+      const expectedHitRate = lastInput ? lastInput.occupancy : 0;
+      byId('hitRateMeta').textContent = `Observed hit rate: ${hitRatePct.toFixed(1)}% (expected approx. ${expectedHitRate}%)`;
+
+      if (metrics.hits >= targetSampleSize) {
+        byId('fieldStatusNote').textContent = 'Target usable sample reached. You can continue if desired, or export the annotated log now.';
+      } else if (metrics.attempted >= plannedDrawCount) {
+        byId('fieldStatusNote').textContent = 'All current rows have been attempted and the target has not yet been met. A top-up batch is likely needed.';
+      } else {
+        byId('fieldStatusNote').textContent = `Continue the current ${fieldViewMode} batch. ${metrics.remaining} more usable hit(s) are still needed.`;
+      }
+
+      renderFieldTable();
+    }
+
+    function renderFieldTable() {
+      const tbody = byId('fieldLogBody');
+      if (!fieldLogRows.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="small">No active field log yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = fieldLogRows.map((row, index) => `
+        <tr>
+          <td>${row.DisplayIndex}</td>
+          <td>${row.Range}</td>
+          <td>${row.Side}</td>
+          <td>${row.Bay}</td>
+          <td>${row.Shelf}</td>
+          <td>${row.Item}</td>
+          <td>
+            <select class="status-select" data-index="${index}" data-field="Status">
+              ${['Pending', 'Surveyed', 'Empty / not found', 'Inaccessible', 'Duplicate / unusable'].map(option => `<option value="${option}" ${row.Status === option ? 'selected' : ''}>${option}</option>`).join('')}
+            </select>
+          </td>
+          <td>
+            <input class="notes-input" data-index="${index}" data-field="Notes" value="${String(row.Notes || '').replace(/"/g, '&quot;')}" placeholder="Optional notes" />
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function handleFieldLogInput(event) {
+      const target = event.target;
+      const rowIndex = parseInt(target.dataset.index, 10);
+      const field = target.dataset.field;
+      if (!Number.isFinite(rowIndex) || !fieldLogRows[rowIndex]) return;
+      if (field === 'Status') {
+        fieldLogRows[rowIndex].Status = target.value;
+      } else if (field === 'Notes') {
+        fieldLogRows[rowIndex].Notes = target.value;
+      }
+      renderFieldDashboard();
+    }
+
+    function saveFieldProgress() {
+      if (!fieldLogRows.length) return;
+      const payload = {
+        fieldLogRows,
+        fieldViewMode,
+        targetSampleSize,
+        plannedDrawCount,
+        collectionName: byId('collectionName').value.trim() || 'Preservation Survey Sample',
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(FIELD_STORAGE_KEY, JSON.stringify(payload));
+      byId('fieldStatusNote').textContent = `Progress saved in this browser (${fieldViewMode} view).`;
+    }
+
+    function loadFieldProgress() {
+      try {
+        const raw = localStorage.getItem(FIELD_STORAGE_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        if (!Array.isArray(data.fieldLogRows) || !data.fieldLogRows.length) return false;
+        fieldLogRows = data.fieldLogRows;
+        fieldViewMode = data.fieldViewMode === 'random' ? 'random' : 'walking';
+        targetSampleSize = Number.isFinite(data.targetSampleSize) ? data.targetSampleSize : 0;
+        plannedDrawCount = Number.isFinite(data.plannedDrawCount) ? data.plannedDrawCount : fieldLogRows.length;
+        setFieldViewMode(fieldViewMode);
+        renderFieldDashboard();
+        updateFieldButtons();
+        byId('fieldStatusNote').textContent = `Recovered saved field progress from this browser (${fieldViewMode} view).`;
+        return true;
+      } catch (err) {
+        console.warn('Could not load saved field progress.', err);
+        return false;
+      }
+    }
+
+    function clearSavedFieldProgress() {
+      localStorage.removeItem(FIELD_STORAGE_KEY);
+      byId('fieldStatusNote').textContent = fieldLogRows.length
+        ? 'Saved field progress cleared for this browser. Current active field log remains loaded until reset.'
+        : 'Saved field progress cleared for this browser.';
+    }
+
+    function resetFieldStatuses() {
+      if (!fieldLogRows.length) return;
+      fieldLogRows = fieldLogRows.map((row, index) => ({
+        ...row,
+        DisplayIndex: index + 1,
+        Status: 'Pending',
+        Notes: '',
+      }));
+      renderFieldDashboard();
+    }
+
+    function getAnnotatedFieldRows() {
+      return fieldLogRows.map(row => ({
+        DisplayIndex: row.DisplayIndex,
+        RandomOrderIndex: row.RandomOrderIndex,
+        Range: row.Range,
+        Side: row.Side,
+        Bay: row.Bay,
+        Shelf: row.Shelf,
+        Item: row.Item,
+        Status: row.Status,
+        Notes: row.Notes,
+      }));
+    }
+
     function toCSV(rows) {
       if (!rows.length) return '';
       const headers = Object.keys(rows[0]);
       const escapeCell = value => {
         const s = String(value ?? '');
-        return /[",
-]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
       };
       const lines = [headers.join(',')];
-      for (const row of rows) lines.push(headers.map(header => escapeCell(row[header])).join(','));
-      return lines.join('
-');
+      for (const row of rows) {
+        lines.push(headers.map(header => escapeCell(row[header])).join(','));
+      }
+      return lines.join('\n');
     }
+
     function downloadText(filename, content, type = 'text/plain;charset=utf-8') {
       const blob = new Blob([content], { type });
       const url = URL.createObjectURL(blob);
@@ -700,28 +1152,74 @@
       a.remove();
       URL.revokeObjectURL(url);
     }
+
     function runSelfTests() {
       const pattern = parsePattern('7, 8, 9');
       console.assert(pattern.length === 3 && pattern[0] === 7 && pattern[2] === 9, 'parsePattern failed');
-      const overrides = parseRangeBayMap('1:7,8
-3:6,7', 2);
+
+      const overrides = parseRangeBayMap('1:7,8\n3:6,7', 2);
       console.assert(overrides.get(1)[0] === 7 && overrides.get(3)[1] === 7, 'parseRangeBayMap failed');
+
       const sample = computeSampleSize(133000, 1.96, 3);
       console.assert(sample.n > 0 && sample.n < 2000, 'computeSampleSize failed');
-      const map = buildUniverseMap({ ranges: 2, sidesPerRange: 2, shelvesPerBay: 2, itemsPerShelf: 10, bayPattern: [2], sideLabels: ['A', 'B'], rangeBayOverrides: new Map() });
+
+      const map = buildUniverseMap({
+        ranges: 2,
+        sidesPerRange: 2,
+        shelvesPerBay: 2,
+        itemsPerShelf: 10,
+        bayPattern: [2],
+        sideLabels: ['A', 'B'],
+        rangeBayOverrides: new Map(),
+      });
       console.assert(map.totalSlots === 80, 'buildUniverseMap failed');
       const location = locateIndex(0, map, 2, 10);
       console.assert(location.Range === 1 && location.Side === 'A' && location.Bay === 1 && location.Shelf === 1 && location.Item === 1, 'locateIndex failed');
+
+      const csv = toCSV([{ A: 'x', B: 'line\nbreak' }]);
+      console.assert(csv.includes('"line\nbreak"'), 'toCSV newline escaping failed');
     }
+
     byId('generateBtn').addEventListener('click', generate);
     byId('topUpBtn').addEventListener('click', generateTopUp);
-    byId('downloadRandomBtn').addEventListener('click', () => downloadText('calipr_random_order.csv', toCSV(randomRows), 'text/csv;charset=utf-8'));
-    byId('downloadWalkingBtn').addEventListener('click', () => downloadText('calipr_walking_order.csv', toCSV(walkingRows), 'text/csv;charset=utf-8'));
-    byId('downloadTopUpBtn').addEventListener('click', () => downloadText('calipr_top_up_batch.csv', toCSV(topUpRows), 'text/csv;charset=utf-8'));
-    byId('downloadMethodBtn').addEventListener('click', () => downloadText('calipr_methods_note.txt', methodSummary));
+    byId('downloadRandomBtn').addEventListener('click', () => {
+      downloadText('calipr_random_order.csv', toCSV(randomRows), 'text/csv;charset=utf-8');
+    });
+    byId('downloadWalkingBtn').addEventListener('click', () => {
+      downloadText('calipr_walking_order.csv', toCSV(walkingRows), 'text/csv;charset=utf-8');
+    });
+    byId('downloadTopUpBtn').addEventListener('click', () => {
+      downloadText('calipr_top_up_batch.csv', toCSV(topUpRows), 'text/csv;charset=utf-8');
+    });
+    byId('downloadMethodBtn').addEventListener('click', () => {
+      downloadText('calipr_methods_note.txt', methodSummary);
+    });
     byId('resetBtn').addEventListener('click', resetDefaults);
+    byId('initDashboardBtn').addEventListener('click', () => {
+      if (!walkingRows.length && !randomRows.length) return;
+      createFieldLogRows();
+      byId('fieldStatusNote').textContent = `Field dashboard initialized from the current ${fieldViewMode} batch.`;
+    });
+    byId('walkingViewBtn').addEventListener('click', () => {
+      setFieldViewMode('walking');
+      if (fieldLogRows.length) createFieldLogRows();
+    });
+    byId('randomViewBtn').addEventListener('click', () => {
+      setFieldViewMode('random');
+      if (fieldLogRows.length) createFieldLogRows();
+    });
+    byId('saveFieldBtn').addEventListener('click', saveFieldProgress);
+    byId('resetFieldBtn').addEventListener('click', resetFieldStatuses);
+    byId('clearSavedFieldBtn').addEventListener('click', clearSavedFieldProgress);
+    byId('exportFieldBtn').addEventListener('click', () => {
+      downloadText('calipr_field_log_annotated.csv', toCSV(getAnnotatedFieldRows()), 'text/csv;charset=utf-8');
+    });
+    byId('fieldLogBody').addEventListener('input', handleFieldLogInput);
+    byId('fieldLogBody').addEventListener('change', handleFieldLogInput);
+
     runSelfTests();
     resetDefaults();
+    loadFieldProgress();
   </script>
 </body>
 </html>
