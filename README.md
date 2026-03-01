@@ -1,4 +1,4 @@
-# CALIPR-Style Preservation Survey Sampler
+# Shelf-Life Preservation Survey Sampler
 
 A lightweight, browser-based tool for planning statistically grounded preservation condition surveys in libraries, archives, and special collections.
 
@@ -84,8 +84,7 @@ Built-in browser console self-tests check:
 
 ## Acknowledgment
 
-This tool is inspired by the preservation survey-planning logic documented in the original CALIPR project developed through the University of California preservation community.
-
+This tool is inspired by the preservation survey-planning logic documented in the original CALIPR project developed through the University of California in the 1980s-1990s.
 ## License
 
 See `LICENSE`.
